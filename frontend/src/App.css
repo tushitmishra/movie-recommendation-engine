@@ -93,3 +93,27 @@
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
 }
+
+/* Mood chips — tvOS-style; explicit colors so text never washes out */
+button.atv-mood-chip {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(44, 44, 46, 0.92);
+  color: #f5f5f7;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+button.atv-mood-chip:hover {
+  background: rgba(58, 58, 60, 0.95);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+button.atv-mood-chip-active {
+  background: #f5f5f7 !important;
+  color: #000000 !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}

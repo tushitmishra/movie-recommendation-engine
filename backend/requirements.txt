@@ -7,3 +7,6 @@ bcrypt
 python-jose[cryptography]
 pydantic[email]
 requests
+numpy
+scipy
+scikit-learn

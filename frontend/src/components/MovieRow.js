@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-const MovieRow = ({ title, movies, large = false }) => {
+const MovieRow = ({ title, subtitle, movies, large = false }) => {
   const scrollRef = useRef(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(true);
@@ -27,12 +27,17 @@ const MovieRow = ({ title, movies, large = false }) => {
   return (
     <div className="relative group/row" data-testid="movie-row">
       <div className="flex items-baseline justify-between mb-3 px-6 md:px-12 lg:px-14">
-        <h2
-          className="text-xl md:text-2xl font-bold tracking-tight text-[#F5F5F7]"
-          style={{ fontFamily: 'Inter, sans-serif' }}
-        >
-          {title}
-        </h2>
+        <div>
+          <h2
+            className="text-xl md:text-2xl font-bold tracking-tight text-[#F5F5F7]"
+            style={{ fontFamily: 'Inter, sans-serif' }}
+          >
+            {title}
+          </h2>
+          {subtitle && (
+            <p className="text-xs md:text-sm text-[#86868B] mt-1 font-normal tracking-wide">{subtitle}</p>
+          )}
+        </div>
         <span className="text-sm text-[#0071E3] hover:underline cursor-pointer hidden md:block">
           See All
         </span>

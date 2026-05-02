@@ -2,6 +2,31 @@ import { useState, useEffect } from 'react';
 import { movieApi } from '../api/movieApi';
 import { Link } from 'react-router-dom';
 import { Search as SearchIcon, Star, X } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+const GENRE_ALL = '__all__';
+
+const YEAR_MIN = 1874;
+const YEAR_MAX = new Date().getFullYear() + 8;
+
+function sanitizeYearDigits(raw) {
+  return String(raw).replace(/\D/g, '').slice(0, 4);
+}
+
+function parseReleaseYear(yearStr) {
+  const s = String(yearStr).trim();
+  if (!s) return null;
+  if (s.length !== 4) return null;
+  const y = parseInt(s, 10);
+  if (Number.isNaN(y) || y < YEAR_MIN || y > YEAR_MAX) return null;
+  return y;
+}
 
 const Search = () => {
   const [query, setQuery] = useState('');
@@ -9,6 +34,7 @@ const Search = () => {
   const [genres, setGenres] = useState([]);
   const [selectedGenre, setSelectedGenre] = useState('');
   const [year, setYear] = useState('');
+  const [yearError, setYearError] = useState('');
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
@@ -34,12 +60,26 @@ const Search = () => {
   };
 
   const handleDiscover = async () => {
+    setYearError('');
+    const trimmed = year.trim();
+    let y = null;
+    if (trimmed) {
+      if (trimmed.length < 4) {
+        setYearError(`Use a 4-digit year (${YEAR_MIN}–${YEAR_MAX})`);
+        return;
+      }
+      y = parseReleaseYear(trimmed);
+      if (y === null) {
+        setYearError(`Year must be between ${YEAR_MIN} and ${YEAR_MAX}`);
+        return;
+      }
+    }
     setLoading(true);
     setSearched(true);
     try {
       const params = {};
       if (selectedGenre) params.genre = selectedGenre;
-      if (year) params.year = parseInt(year);
+      if (y !== null) params.year = y;
       const res = await movieApi.discover(params);
       setResults(res.data.results || []);
     } catch (e) { console.error(e); }
@@ -47,7 +87,12 @@ const Search = () => {
   };
 
   const clearAll = () => {
-    setSelectedGenre(''); setYear(''); setQuery(''); setResults([]); setSearched(false);
+    setSelectedGenre('');
+    setYear('');
+    setYearError('');
+    setQuery('');
+    setResults([]);
+    setSearched(false);
   };
 
   return (
@@ -76,25 +121,57 @@ const Search = () => {
         </form>
 
         {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 mb-8">
-          <select
-            value={selectedGenre}
-            onChange={(e) => setSelectedGenre(e.target.value)}
-            className="atv-input h-10 rounded-lg px-3 text-sm min-w-[140px]"
-            data-testid="genre-filter"
+        <div className="flex flex-wrap items-center gap-3 mb-2">
+          <Select
+            value={selectedGenre ? String(selectedGenre) : GENRE_ALL}
+            onValueChange={(v) => setSelectedGenre(v === GENRE_ALL ? '' : v)}
           >
-            <option value="">All Genres</option>
-            {genres.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </select>
+            <SelectTrigger
+              className="atv-input h-10 w-[min(100vw-3rem,200px)] rounded-lg text-sm text-[#F5F5F7] data-[placeholder]:text-[#86868B]"
+              data-testid="genre-filter"
+            >
+              <SelectValue placeholder="All Genres" />
+            </SelectTrigger>
+            <SelectContent className="bg-[#2C2C2E] border border-white/10 text-[#F5F5F7] z-[100]">
+              <SelectItem
+                value={GENRE_ALL}
+                className="cursor-pointer focus:bg-[#3A3A3C] focus:text-[#F5F5F7] text-[#F5F5F7]"
+              >
+                All Genres
+              </SelectItem>
+              {genres.map((g) => (
+                <SelectItem
+                  key={g.id}
+                  value={String(g.id)}
+                  className="cursor-pointer focus:bg-[#3A3A3C] focus:text-[#F5F5F7] text-[#F5F5F7]"
+                >
+                  {g.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          <input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            placeholder="Year"
-            className="atv-input h-10 rounded-lg px-3 text-sm w-24"
-            data-testid="year-filter"
-          />
+          <div className="flex flex-col gap-1">
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={year}
+              onChange={(e) => {
+                setYear(sanitizeYearDigits(e.target.value));
+                setYearError('');
+              }}
+              placeholder="Year"
+              aria-invalid={!!yearError}
+              className="atv-input h-10 rounded-lg px-3 text-sm w-[5.5rem] text-[#F5F5F7] placeholder:text-[#86868B]"
+              data-testid="year-filter"
+            />
+            {yearError ? (
+              <span className="text-xs text-[#FF9F0A] max-w-[200px]" data-testid="year-error">
+                {yearError}
+              </span>
+            ) : null}
+          </div>
 
           <button
             onClick={handleDiscover}
@@ -114,6 +191,9 @@ const Search = () => {
             </button>
           )}
         </div>
+        <p className="text-[11px] text-[#636366] mb-6">
+          Year filter uses full release year (e.g. 2019). Leave blank to ignore.
+        </p>
 
         {/* Results */}
         {loading ? (

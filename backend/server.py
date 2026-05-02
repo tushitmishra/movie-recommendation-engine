@@ -18,6 +18,8 @@ from bson import ObjectId
 import requests
 import secrets
 
+from recommendation_engine import build_recommendations
+
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
@@ -282,7 +284,12 @@ async def discover_movies(
         params = {"api_key": TMDB_API_KEY, "sort_by": sort_by, "page": page}
         if genre:
             params["with_genres"] = genre
-        if year:
+        # TMDB primary_release_year must be a real calendar year
+        if year is not None:
+            y_max = datetime.now(timezone.utc).year + 8
+            if year < 1874 or year > y_max:
+                year = None
+        if year is not None:
             params["primary_release_year"] = year
         response = requests.get(f"{TMDB_BASE_URL}/discover/movie", params=params)
         response.raise_for_status()
@@ -388,23 +395,43 @@ async def get_movie_ratings(movie_id: int):
     return [RatingResponse(id=str(r.get("_id", "")), **r) for r in ratings]
 
 @api_router.get("/recommendations")
-async def get_recommendations(current_user: dict = Depends(get_current_user)):
-    watchlist = current_user.get("watchlist", [])
-    favorites = current_user.get("favorites", [])
-    
-    if not watchlist and not favorites:
-        return await get_trending_movies()
-    
-    all_movies = list(set(watchlist + favorites))
-    if all_movies:
-        movie_id = all_movies[0]
-        try:
-            response = requests.get(f"{TMDB_BASE_URL}/movie/{movie_id}/recommendations?api_key={TMDB_API_KEY}")
-            response.raise_for_status()
-            return response.json()
-        except:
-            return await get_trending_movies()
-    
+async def get_recommendations(
+    current_user: dict = Depends(get_current_user),
+    type: str = "hybrid",
+    mood: Optional[str] = None,
+):
+    """Hybrid / content (TF-IDF+cosine) / collaborative / mood — query: ?type=&mood="""
+    t = (type or "hybrid").lower().strip()
+    if t not in ("hybrid", "content", "collaborative", "mood"):
+        t = "hybrid"
+
+    raw_ratings = await db.ratings.find({}).to_list(10000)
+    ratings_list = []
+    for r in raw_ratings:
+        uid = r.get("user_id")
+        ratings_list.append({
+            "user_id": str(uid) if uid is not None else "",
+            "movie_id": r.get("movie_id"),
+            "rating": r.get("rating"),
+        })
+
+    try:
+        data = build_recommendations(
+            user_id=current_user["id"],
+            watchlist=list(current_user.get("watchlist") or []),
+            favorites=list(current_user.get("favorites") or []),
+            ratings=ratings_list,
+            api_key=TMDB_API_KEY,
+            base_url=TMDB_BASE_URL,
+            rec_type=t,
+            mood=mood,
+            limit=20,
+        )
+        if data.get("results"):
+            return data
+    except Exception as e:
+        logger.exception("recommendations engine: %s", e)
+
     return await get_trending_movies()
 
 app.include_router(api_router)
@@ -446,8 +473,9 @@ async def startup_event():
     elif not verify_password(admin_password, existing["password_hash"]):
         await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
     
-    Path("/app/memory").mkdir(exist_ok=True)
-    with open("/app/memory/test_credentials.md", "w") as f:
+    mem_dir = ROOT_DIR / "memory"
+    mem_dir.mkdir(exist_ok=True)
+    with open(mem_dir / "test_credentials.md", "w") as f:
         f.write(f"# Test Credentials\n\n")
         f.write(f"## Admin Account\n")
         f.write(f"- Email: {admin_email}\n")

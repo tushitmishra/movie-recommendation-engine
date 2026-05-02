@@ -5,6 +5,31 @@ import { Link } from 'react-router-dom';
 import { Play, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import MovieRow from '../components/MovieRow';
 
+const MOODS = [
+  { id: 'chill', label: 'Chill' },
+  { id: 'laugh', label: 'Laugh' },
+  { id: 'thrill', label: 'Thrill' },
+  { id: 'romance', label: 'Romance' },
+  { id: 'action', label: 'Action' },
+  { id: 'family', label: 'Family' },
+  { id: 'scifi', label: 'Sci‑Fi' },
+  { id: 'fantasy', label: 'Fantasy' },
+  { id: 'mystery', label: 'Mystery' },
+];
+
+/** Guest / fallback: primary TMDB genre id per mood (matches backend MOOD_GENRES) */
+const MOOD_DISCOVER_GENRE = {
+  chill: '18',
+  laugh: '35',
+  thrill: '53',
+  romance: '10749',
+  action: '28',
+  family: '10751',
+  scifi: '878',
+  fantasy: '14',
+  mystery: '9648',
+};
+
 const Home = () => {
   const [heroMovies, setHeroMovies] = useState([]);
   const [heroIdx, setHeroIdx] = useState(0);
@@ -13,7 +38,11 @@ const Home = () => {
   const [topRated, setTopRated] = useState([]);
   const [nowPlaying, setNowPlaying] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
-  const [recommendations, setRecommendations] = useState([]);
+  const [recHybrid, setRecHybrid] = useState([]);
+  const [recContent, setRecContent] = useState([]);
+  const [recCollab, setRecCollab] = useState([]);
+  const [selectedMood, setSelectedMood] = useState(null);
+  const [moodMovies, setMoodMovies] = useState([]);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -39,9 +68,24 @@ const Home = () => {
 
       if (user) {
         try {
-          const recsRes = await movieApi.getRecommendations();
-          setRecommendations(recsRes.data.results || []);
-        } catch (e) { /* silent */ }
+          const [hybridRes, contentRes, collabRes] = await Promise.all([
+            movieApi.getRecommendations({ type: 'hybrid' }),
+            movieApi.getRecommendations({ type: 'content' }),
+            movieApi.getRecommendations({ type: 'collaborative' }),
+          ]);
+          setRecHybrid(hybridRes.data.results || []);
+          setRecContent(contentRes.data.results || []);
+          setRecCollab(collabRes.data.results || []);
+        } catch (e) {
+          setRecHybrid([]);
+          setRecContent([]);
+          setRecCollab([]);
+        }
+      } else {
+        setRecHybrid([]);
+        setRecContent([]);
+        setRecCollab([]);
+        setMoodMovies([]);
       }
     } catch (error) {
       console.error('Error loading movies:', error);
@@ -56,6 +100,33 @@ const Home = () => {
     const timer = setInterval(nextHero, 7000);
     return () => clearInterval(timer);
   }, [heroMovies.length, nextHero]);
+
+  useEffect(() => {
+    if (!selectedMood) {
+      setMoodMovies([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        if (user) {
+          const res = await movieApi.getRecommendations({ type: 'mood', mood: selectedMood });
+          if (!cancelled) setMoodMovies(res.data.results || []);
+        } else {
+          const gid = MOOD_DISCOVER_GENRE[selectedMood];
+          if (!gid) {
+            if (!cancelled) setMoodMovies([]);
+            return;
+          }
+          const res = await movieApi.discover({ genre: gid });
+          if (!cancelled) setMoodMovies(res.data.results || []);
+        }
+      } catch {
+        if (!cancelled) setMoodMovies([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user, selectedMood]);
 
   const hero = heroMovies[heroIdx];
 
@@ -155,8 +226,51 @@ const Home = () => {
       )}
 
       <div className="py-10 space-y-10">
+        <section className="px-6 md:px-12 lg:px-14 mb-2" data-testid="mood-strip">
+          <h2
+            className="text-xl md:text-2xl font-bold tracking-tight text-[#F5F5F7] mb-4"
+            style={{ fontFamily: 'Inter, sans-serif' }}
+          >
+            What are you in the mood for?
+          </h2>
+          <div className="flex gap-2 md:gap-3 overflow-x-auto scrollbar-hide atv-row-scroll pb-1">
+            {MOODS.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => setSelectedMood((prev) => (prev === m.id ? null : m.id))}
+                className={`atv-mood-chip flex-shrink-0 rounded-full px-5 py-2.5 text-sm font-medium transition-all ${
+                  selectedMood === m.id ? 'atv-mood-chip-active' : ''
+                }`}
+                data-testid={`mood-${m.id}`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
         {trending.length > 0 && <MovieRow title="Trending Now" movies={trending} large />}
-        {user && recommendations.length > 0 && <MovieRow title="For You" movies={recommendations} />}
+        {user && recHybrid.length > 0 && (
+          <MovieRow title="For You" subtitle="Hybrid picks — taste + community" movies={recHybrid} />
+        )}
+        {user && recContent.length > 0 && (
+          <MovieRow title="Because of Your Taste" subtitle="TF‑IDF on plots & genres · cosine match" movies={recContent} />
+        )}
+        {user && recCollab.length > 0 && (
+          <MovieRow title="Fans Like You" subtitle="Collaborative filtering across ratings" movies={recCollab} />
+        )}
+        {selectedMood && moodMovies.length > 0 && (
+          <MovieRow
+            title={`${MOODS.find((x) => x.id === selectedMood)?.label || 'Your mood'} picks`}
+            subtitle={
+              user
+                ? 'Blended with your profile'
+                : 'Popular titles in this vibe — sign in for personalized picks'
+            }
+            movies={moodMovies}
+          />
+        )}
         {popular.length > 0 && <MovieRow title="Popular" movies={popular} />}
         {topRated.length > 0 && <MovieRow title="Top Rated" movies={topRated} />}
         {nowPlaying.length > 0 && <MovieRow title="Now Playing" movies={nowPlaying} />}
