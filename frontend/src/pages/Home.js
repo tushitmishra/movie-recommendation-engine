@@ -51,31 +51,33 @@ const Home = () => {
 
   const loadMovies = async () => {
     try {
-      const [trendingRes, popularRes, topRatedRes, nowPlayingRes, upcomingRes] = await Promise.all([
+      const results = await Promise.allSettled([
         movieApi.getTrending(),
         movieApi.getPopular(),
         movieApi.getTopRated(),
         movieApi.getNowPlaying(),
         movieApi.getUpcoming(),
       ]);
-      const t = trendingRes.data.results || [];
+      
+      const t = results[0].status === 'fulfilled' ? results[0].value.data.results || [] : [];
       setTrending(t);
       setHeroMovies(t.slice(0, 5).filter(m => m.backdrop_path));
-      setPopular(popularRes.data.results || []);
-      setTopRated(topRatedRes.data.results || []);
-      setNowPlaying(nowPlayingRes.data.results || []);
-      setUpcoming(upcomingRes.data.results || []);
+      
+      setPopular(results[1].status === 'fulfilled' ? results[1].value.data.results || [] : []);
+      setTopRated(results[2].status === 'fulfilled' ? results[2].value.data.results || [] : []);
+      setNowPlaying(results[3].status === 'fulfilled' ? results[3].value.data.results || [] : []);
+      setUpcoming(results[4].status === 'fulfilled' ? results[4].value.data.results || [] : []);
 
       if (user) {
         try {
-          const [hybridRes, contentRes, collabRes] = await Promise.all([
+          const userResults = await Promise.allSettled([
             movieApi.getRecommendations({ type: 'hybrid' }),
             movieApi.getRecommendations({ type: 'content' }),
             movieApi.getRecommendations({ type: 'collaborative' }),
           ]);
-          setRecHybrid(hybridRes.data.results || []);
-          setRecContent(contentRes.data.results || []);
-          setRecCollab(collabRes.data.results || []);
+          setRecHybrid(userResults[0].status === 'fulfilled' ? userResults[0].value.data.results || [] : []);
+          setRecContent(userResults[1].status === 'fulfilled' ? userResults[1].value.data.results || [] : []);
+          setRecCollab(userResults[2].status === 'fulfilled' ? userResults[2].value.data.results || [] : []);
         } catch (e) {
           setRecHybrid([]);
           setRecContent([]);

@@ -2,9 +2,10 @@ fastapi
 uvicorn[standard]
 motor
 pymongo
+dnspython
 python-dotenv
 bcrypt
-python-jose[cryptography]
+PyJWT
 pydantic[email]
 requests
 numpy

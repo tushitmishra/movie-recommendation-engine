@@ -436,9 +436,15 @@ async def get_recommendations(
 
 app.include_router(api_router)
 
+def _cors_origins() -> List[str]:
+    raw = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+    parts = [o.strip() for o in raw.split(",") if o.strip()]
+    return parts if parts else ["http://localhost:3000"]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.environ.get('FRONTEND_URL', '*')],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
