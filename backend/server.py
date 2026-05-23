@@ -435,6 +435,9 @@ async def get_recommendations(
     return await get_trending_movies()
 
 app.include_router(api_router)
+@app.get("/")
+async def health_check():
+    return {"status": "ok", "service": "cineverse-backend"}
 
 def _cors_origins() -> List[str]:
     raw = os.environ.get("FRONTEND_URL", "http://localhost:3000")
